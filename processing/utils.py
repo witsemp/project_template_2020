@@ -2,97 +2,54 @@ import numpy as np
 import cv2 as cv
 import imutils
 import math
+from scipy import ndimage
+from skimage.measure import compare_ssim
+
+# Roberts edge detection algorithm
+
+
+def roberts_cross(image):
+    roberts_cross_v = np.array([[0, 0, 0],
+                                [0, 1, 0],
+                                [0, 0, -1]])
+
+    roberts_cross_h = np.array([[0, 0, 0],
+                                [0, 0, 1],
+                                [0, -1, 0]])
+
+    image = image.astype(np.int32)
+    vertical = ndimage.convolve(image, roberts_cross_v)
+    horizontal = ndimage.convolve(image, roberts_cross_h)
+    output_image = np.sqrt(np.square(horizontal) + np.square(vertical))
+    return output_image.astype(np.uint8)
+
+
 def extract_plate(image):
+    kernel1 = np.ones((1, 7), np.uint8)
+    kernel2 = np.ones((7, 1), np.uint8)
+    kernel3 = np.ones((7, 7), np.uint8)
+    kernel4 = np.ones((3, 3), np.uint8)
+    kernel5 = np.ones((9, 9), np.uint8)
+    kernel6 = np.ones((5, 5), np.uint8)
+
     image_gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
-    config = {
-        "w_min": 10,  # char pixel width min
-        "w_max": 100,  # char pixel width max
-        "h_min": 35,  # char pixel height min
-        "h_max": 180,  # char pixel height max
-        "hw_min": 1,  # height to width ration min
-        "hw_max": 3.5,  # height to width ration max
-        "y_offset": 70,  # maximum y offset between chars
-        "x_offset": 150,  # maximum x gap between chars
-        "h_ave_diff": 1.09,  # acceptable limit for variation between characters
-        "x_inbound": 15
-    }
-    correctly_sized = []
-    kernel = np.ones((3, 3), np.uint8)
-    image = cv.GaussianBlur(image, (5, 5), 0)
-    gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
-    gray = cv.equalizeHist(gray)
-    gray = cv.bilateralFilter(gray, 11, 17, 17)
-    # thresh = cv.adaptiveThreshold(gray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 25, 0)
-    thresh = cv.Canny(gray, 10, 200)
+    image_gray = cv.bilateralFilter(image_gray, 5, 75, 75)
+    image_roberts = roberts_cross(image_gray)
+    image_roberts = cv.dilate(image_roberts, kernel4, iterations=1)
+    # image_roberts = cv.morphologyEx(image_roberts, cv.MORPH_CLOSE, kernel6, iterations=1)
+    image_opened = cv.morphologyEx(image_roberts, cv.MORPH_OPEN, kernel1, iterations=1)
+    image_closed = cv.morphologyEx(image_roberts, cv.MORPH_CLOSE, kernel1, iterations=1)
+    (score, image_diff) = compare_ssim(image_opened, image_closed, full=True)
+    image_diff = (image_diff * 255).astype("uint8")
+    image_diff = cv.morphologyEx(image_diff, cv.MORPH_CLOSE, kernel2, iterations=3)
+    image_thresh = cv.threshold(image_diff, 0, 255, cv.THRESH_BINARY_INV + cv.THRESH_OTSU)[1]
+    image_thresh = cv.dilate(image_thresh, kernel6, iterations=8)
+    # image_thresh = cv.morphologyEx(image_thresh, cv.MORPH_OPEN, kernel3, iterations=1)
 
-    # ret, thresh = cv.threshold(thresh, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
-    # thresh = cv.adaptiveThreshold(thresh, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 25, 0)
-    # thresh = cv.morphologyEx(thresh, cv.MORPH_GRADIENT, kernel, iterations=1)
-    # ret, thresh = cv.threshold(thresh, 0,255,cv.THRESH_BINARY+cv.THRESH_OTSU)
-    # thresh = cv.adaptiveThreshold(thresh, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 25, 0)
-    # thresh = cv.morphologyEx(thresh, cv.MORPH_GRADIENT, kernel, iterations=1)
-    # thresh = cv.morphologyEx(thresh, cv.MORPH_OPEN, kernel, iterations=1)
-    # thresh = cv.erode(thresh, kernel)
+    cv.imshow('original', image)
+    cv.imshow('thresh', image_thresh)
 
-    cnts = cv.findContours(thresh.copy(), cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-    cnts = imutils.grab_contours(cnts)
-    cnts = sorted(cnts, key=cv.contourArea, reverse=True)[:30]
-    for c in cnts:
-        (x, y, w, h) = cv.boundingRect(c)
-        if config["w_min"] < w < config["w_max"] and config["h_min"] < h < config["h_max"]:
-            correctly_sized.append((x, y, w, h))
-            cv.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 2)
-    correctly_sized = sorted(correctly_sized, key=lambda x: x[0])
-    legit = []
-    y_values = [i[1] for i in correctly_sized]
-    mean_value = np.mean(y_values)
-    print(mean_value)
-    for i, element in enumerate(correctly_sized):
-        if mean_value - config['y_offset'] < element[1] < mean_value + config['y_offset']:
-            legit.append(element)
-
-    for element in legit:
-        for element1 in legit:
-            if abs(element[0] - element1[0]) < config["x_inbound"] and element != element1:
-                legit.remove(element1)
-
-    for i, element in enumerate(legit):
-        if i != 0:
-            prev = legit[i-1]
-            if abs(element[0]-prev[0]) > config['x_offset']:
-                legit.remove(element)
-
-    for element in legit:
-        (x, y, w, h) = element
-        cv.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-    # new = image[legit[0][1] : legit[-1][1], legit[0][0]: legit[-1][0]]
-
-    new = np.empty_like(image)
-    # for element in legit:
-    #     new[element[1]:element[1]+element[3], element[0]:element[0]+element[2]] = image[element[1]:element[1]+element[3], element[0]:element[0]+element[2]]
-
-    if len(legit) > 0:
-        new = image_gray[legit[0][1] - 30: legit[-1][1] + legit[-1][3] + 30, legit[0][0] - 30: legit[-1][0] + legit[-1][2] + 30]
-        new = cv.equalizeHist(new)
-        new = cv.bilateralFilter(new, 11, 17, 17)
-        new = cv.adaptiveThreshold(new, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 25, 0)
-        new = cv.morphologyEx(new, cv.MORPH_OPEN, kernel, iterations=1)
-        new = cv.morphologyEx(new, cv.MORPH_GRADIENT, kernel, iterations=1)
-
-
-    # new = cv.adaptiveThreshold(new, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 25, 25)
-
-
-
-
-
-    cv.imshow("Original Image", image)
-    cv.imshow('Processed', thresh)
-    cv.imshow('new', new)
-    # cv.imshow('crop', new)
-    cv.waitKey(2000)
-
-
+    cv.waitKey(5000)
 
 
 def perform_processing(image: np.ndarray) -> str:
