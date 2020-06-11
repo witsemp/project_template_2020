@@ -1,12 +1,8 @@
 import numpy as np
 import cv2 as cv
 import imutils
-import math
 from scipy import ndimage
 from skimage.measure import compare_ssim
-
-
-# Roberts edge detection algorithm
 
 
 def roberts_cross(image):
@@ -28,11 +24,11 @@ def roberts_cross(image):
 def extract_plate(image):
     kernel1 = np.ones((1, 7), np.uint8)
     kernel2 = np.ones((7, 1), np.uint8)
-    kernel7 = np.ones((5, 1), np.uint8)
+    # kernel7 = np.ones((5, 1), np.uint8)
     kernel3 = np.ones((7, 7), np.uint8)
     kernel4 = np.ones((3, 3), np.uint8)
     kernel5 = np.ones((9, 9), np.uint8)
-    kernel6 = np.ones((5, 5), np.uint8)
+    # kernel6 = np.ones((5, 5), np.uint8)
     image_gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
     image_gray = cv.bilateralFilter(image_gray, 5, 75, 75)
     image_roberts = roberts_cross(image_gray)
@@ -46,30 +42,20 @@ def extract_plate(image):
     image_thresh = cv.morphologyEx(image_thresh, cv.MORPH_OPEN, kernel3, iterations=1)
     image_thresh = cv.dilate(image_thresh, kernel5, iterations=7)
     image_thresh = cv.dilate(image_thresh, kernel1, iterations=2)
-
-
-
     return image_thresh
 
-def find_contours(image, image_in):
-    correctly_sized = []
+
+def save_plate(image, image_in):
     possible_plates = {}
-    min_size = 640*480
     config = {
-        "w_min": 100,  # char pixel width min
-        "w_max": 640,  # char pixel width max
-        "h_min": 50,  # char pixel height min
-        "h_max": 480,  # char pixel height max
-        "hw_min": 1,  # height to width ration min
-        "hw_max": 3.5,  # height to width ration max
-        "y_offset": 70,  # maximum y offset between chars
-        "x_offset": 150,  # maximum x gap between chars
-        "h_ave_diff": 1.09,  # acceptable limit for variation between characters
-        "x_inbound": 15,
+        "w_min": 100,
+        "w_max": 640,
+        "h_min": 50,
+        "h_max": 480,
         "w_ref": 520,
         "h_ref": 100,
     }
-    ref_ar = int(config["w_ref"]/config["h_ref"])
+    ref_ar = int(config["w_ref"] / config["h_ref"])
     prox = 5
     cnts = cv.findContours(image.copy(), cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
     cnts = imutils.grab_contours(cnts)
@@ -78,27 +64,58 @@ def find_contours(image, image_in):
     for c in cnts:
         rect = cv.minAreaRect(c)
         _, (w, h), _ = rect
-        if int(w/h) - prox <= ref_ar <= int(w/h) + prox and config["w_min"] < w and config["h_min"] < h:
-            possible_plates[int(w*h)] = c
-    print(possible_plates)
+        if int(w / h) - prox <= ref_ar <= int(w / h) + prox and config["w_min"] < w and config["h_min"] < h:
+            possible_plates[int(w * h)] = c
     max_sized_plate = max(possible_plates.keys())
     plate_cnt = possible_plates[max_sized_plate]
     plate = cv.minAreaRect(plate_cnt)
     box = cv.boxPoints(plate)
     box = np.int0(box)
+    width = int(plate[1][0])
+    height = int(plate[1][1])
+    src_pts = box.astype("float32")
+    dst_pts = np.array([[0, height - 1],
+                        [0, 0],
+                        [width - 1, 0],
+                        [width - 1, height - 1]], dtype="float32")
+
+    M = cv.getPerspectiveTransform(src_pts, dst_pts)
+    warped = cv.warpPerspective(image_in, M, (width, height))
+    if warped.shape[0] > warped.shape[1]:
+        warped = cv.rotate(warped, cv.ROTATE_90_COUNTERCLOCKWISE)
     cv.drawContours(image_in, [box], 0, (0, 0, 255), 2)
-    cv.imshow("Thresholded", image)
-    cv.imshow("Contours", image_in)
+    return warped
+
+# TODO: improve character detection
+def process_plate(image):
+    locs = []
+    kernel = np.ones((5, 5), dtype=np.uint8)
+    image_gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+    image_gray = cv.bilateralFilter(image_gray, 11, 17, 17)
+    image_eq = cv.equalizeHist(image_gray)
+    image_canny = cv.Canny(image_eq, 150, 200)
+    cnts = cv.findContours(image_canny.copy(), cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+    cnts = imutils.grab_contours(cnts)
+    cnts = sorted(cnts, key=cv.contourArea, reverse=True)[:30]
+    for c in cnts:
+        (x, y, w, h) = cv.boundingRect(c)
+        ar = float(h) / float(w)
+        if ar > 0.5 and ar < 4:
+            # (w > 30 and w < 180) and (h > 35 and h < 250)
+            if h > 30 and w > 10:
+                locs.append((x, y, w, h))
+                cv.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+
+    cv.imshow('Plate', image)
+    cv.imshow('Plate_Canny', image_canny)
     cv.waitKey(2000)
-
-
-
-
 
 
 def perform_processing(image: np.ndarray) -> str:
     img = image
     img = cv.resize(img, (640, 480))
     img_thresh = extract_plate(img)
-    find_contours(img_thresh, img)
+    plate = save_plate(img_thresh, img)
+    process_plate(plate)
     return 'XXXXXXX'
