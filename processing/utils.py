@@ -3,6 +3,7 @@ import cv2 as cv
 import imutils
 from scipy import ndimage
 from skimage.measure import compare_ssim
+import collections
 
 
 def roberts_cross(image):
@@ -89,26 +90,44 @@ def save_plate(image, image_in):
 # TODO: improve character detection
 def process_plate(image):
     locs = []
+    significant = []
+
+
     kernel = np.ones((5, 5), dtype=np.uint8)
     image_gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
     image_gray = cv.bilateralFilter(image_gray, 11, 17, 17)
+    image_gray = cv.GaussianBlur(image_gray, (5, 5), 0)
     image_eq = cv.equalizeHist(image_gray)
-    image_canny = cv.Canny(image_eq, 150, 200)
-    cnts = cv.findContours(image_canny.copy(), cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
-    cnts = imutils.grab_contours(cnts)
-    cnts = sorted(cnts, key=cv.contourArea, reverse=True)[:30]
-    for c in cnts:
-        (x, y, w, h) = cv.boundingRect(c)
+    image_thresh = cv.adaptiveThreshold(image_gray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                        cv.THRESH_BINARY, 15, 2)
+    cnts, h = cv.findContours(image_thresh.copy(), cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE, hierarchy=True)
+    # cnts = imutils.grab_contours(cnts)
+    # cnts = sorted(cnts, key=cv.contourArea, reverse=True)[:30]
+    for i, tupl in enumerate(h[0]):
+        if tupl[3] != -1:
+            tupl = np.insert(tupl, 0, [i])
+            locs.append(tupl)
+    for tupl in locs:
+        contour = cnts[tupl[0]]
+        (x, y, w, h) = cv.boundingRect(contour)
         ar = float(h) / float(w)
         if ar > 0.5 and ar < 4:
-            # (w > 30 and w < 180) and (h > 35 and h < 250)
-            if h > 30 and w > 10:
-                locs.append((x, y, w, h))
-                cv.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            if h > 40 and h < 150 and w > 10 and w < 80:
+                significant.append((x, y, w, h))
+
+    
+
+    for element in significant:
+        (x, y, w, h) = element
+        cv.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+
+
+
 
 
     cv.imshow('Plate', image)
-    cv.imshow('Plate_Canny', image_canny)
+    cv.imshow('Plate_Canny', image_thresh)
     cv.waitKey(2000)
 
 
