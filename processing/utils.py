@@ -28,6 +28,7 @@ def roberts_cross(image):
 def extract_plate(image):
     kernel1 = np.ones((1, 7), np.uint8)
     kernel2 = np.ones((7, 1), np.uint8)
+    kernel7 = np.ones((5, 1), np.uint8)
     kernel3 = np.ones((7, 7), np.uint8)
     kernel4 = np.ones((3, 3), np.uint8)
     kernel5 = np.ones((9, 9), np.uint8)
@@ -38,13 +39,16 @@ def extract_plate(image):
     image_roberts = cv.dilate(image_roberts, kernel4, iterations=1)
     image_opened = cv.morphologyEx(image_roberts, cv.MORPH_OPEN, kernel1, iterations=1)
     image_closed = cv.morphologyEx(image_roberts, cv.MORPH_CLOSE, kernel1, iterations=1)
-    (score, image_diff) = compare_ssim(image_opened, image_closed, full=True)
+    (score, image_diff) = compare_ssim(image_closed, image_opened, full=True)
     image_diff = (image_diff * 255).astype("uint8")
     image_diff = cv.morphologyEx(image_diff, cv.MORPH_CLOSE, kernel2, iterations=2)
     image_thresh = cv.threshold(image_diff, 0, 255, cv.THRESH_BINARY_INV + cv.THRESH_OTSU)[1]
     image_thresh = cv.morphologyEx(image_thresh, cv.MORPH_OPEN, kernel3, iterations=1)
-    image_thresh = cv.dilate(image_thresh, kernel3, iterations=8)
-    image_thresh = cv.dilate(image_thresh, kernel5, iterations=2)
+    image_thresh = cv.dilate(image_thresh, kernel5, iterations=7)
+    image_thresh = cv.dilate(image_thresh, kernel1, iterations=2)
+
+
+
     return image_thresh
 
 def find_contours(image, image_in):
@@ -83,6 +87,7 @@ def find_contours(image, image_in):
     box = cv.boxPoints(plate)
     box = np.int0(box)
     cv.drawContours(image_in, [box], 0, (0, 0, 255), 2)
+    cv.imshow("Thresholded", image)
     cv.imshow("Contours", image_in)
     cv.waitKey(2000)
 
