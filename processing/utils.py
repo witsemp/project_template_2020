@@ -107,6 +107,7 @@ def process_plate(image):
         if tupl[3] != -1:
             tupl = np.insert(tupl, 0, [i])
             locs.append(tupl)
+
     for tupl in locs:
         contour = cnts[tupl[0]]
         (x, y, w, h) = cv.boundingRect(contour)
@@ -115,16 +116,9 @@ def process_plate(image):
             if h > 40 and h < 150 and w > 10 and w < 80:
                 significant.append((x, y, w, h))
 
-    
-
     for element in significant:
         (x, y, w, h) = element
         cv.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-
-
-
-
-
 
     cv.imshow('Plate', image)
     cv.imshow('Plate_Canny', image_thresh)
