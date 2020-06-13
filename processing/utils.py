@@ -93,6 +93,7 @@ def process_plate(image):
     significant = []
     correctly_placed = []
     x_prox = 30
+    y_prox = 30
 
     kernel = np.ones((5, 5), dtype=np.uint8)
     image_gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
@@ -139,17 +140,33 @@ def process_plate(image):
             if x - (x_p + w_p) > x_prox:
                 significant.remove(element)
 
+    for i, element in enumerate(significant):
+        if i != 0 and i != len(significant)-1:
+            (x, y, w, h) = element
+            (x_p, y_p, w_p, h_p) = significant[i-1]
+            (x_n, y_n, w_n, h_n) = significant[i + 1]
+            if abs(y - y_p) > y_prox and abs(y_n - y) > y_prox:
+                significant.remove(element)
+
+        if i == 0:
+            (x, y, w, h) = element
+            (x_n, y_n, w_n, h_n) = significant[i + 1]
+            if abs(y_n - y) > y_prox:
+                significant.remove(element)
+
+        if i == len(significant) - 1:
+            (x, y, w, h) = element
+            (x_p, y_p, w_p, h_p) = significant[i-1]
+            if abs(y - y_p) > y_prox:
+                significant.remove(element)
+
     for element in significant:
         (x, y, w, h) = element
         cv.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
-
-
-
-
     cv.imshow('Plate', image)
     cv.imshow('Plate_Canny', image_thresh)
-    cv.waitKey(2000)
+    cv.waitKey(1000)
 
 
 def perform_processing(image: np.ndarray) -> str:
