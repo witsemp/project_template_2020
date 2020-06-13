@@ -3,7 +3,82 @@ import cv2 as cv
 import imutils
 from scipy import ndimage
 from skimage.measure import compare_ssim
-import collections
+from processing import sort_contours
+from skimage.measure import compare_ssim as ssim
+
+
+def reference():
+    ref_A_J = cv.imread('C:/Users/witse/PycharmProjects/project_template_2020/Reference_A_J.png')
+    ref_K_U = cv.imread('C:/Users/witse/PycharmProjects/project_template_2020/Reference_K_U.png')
+    ref_V_Z = cv.imread('C:/Users/witse/PycharmProjects/project_template_2020/Reference_V_Z.png')
+    ref_0_9 = cv.imread('C:/Users/witse/PycharmProjects/project_template_2020/Reference_0_9.png')
+    digits = {}
+    letters = {}
+    all = {}
+    letters_A_J = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
+    letters_K_U = ['K', 'L', 'M', 'N', 'O', 'P', 'R', 'S', 'T', 'U']
+    letters_V_Z = ['V', 'W', 'X', 'Y', 'Z']
+
+    ref_A_J = cv.cvtColor(ref_A_J, cv.COLOR_BGR2GRAY)
+    ref_A_J = cv.threshold(ref_A_J, 10, 255, cv.THRESH_BINARY_INV)[1]
+    refCnts_A_J = cv.findContours(ref_A_J.copy(), cv.RETR_EXTERNAL,
+                                  cv.CHAIN_APPROX_SIMPLE)
+    refCnts_A_J = imutils.grab_contours(refCnts_A_J)
+    refCnts_A_J = sort_contours.sort_contours(refCnts_A_J, method="left-to-right")[0]
+
+    ref_K_U = cv.cvtColor(ref_K_U, cv.COLOR_BGR2GRAY)
+    ref_K_U = cv.threshold(ref_K_U, 10, 255, cv.THRESH_BINARY_INV)[1]
+    refCnts_K_U = cv.findContours(ref_K_U.copy(), cv.RETR_EXTERNAL,
+                                  cv.CHAIN_APPROX_SIMPLE)
+    refCnts_K_U = imutils.grab_contours(refCnts_K_U)
+    refCnts_K_U = sort_contours.sort_contours(refCnts_K_U, method="left-to-right")[0]
+
+    ref_V_Z = cv.cvtColor(ref_V_Z, cv.COLOR_BGR2GRAY)
+    ref_V_Z = cv.threshold(ref_V_Z, 10, 255, cv.THRESH_BINARY_INV)[1]
+
+    refCnts_V_Z = cv.findContours(ref_V_Z.copy(), cv.RETR_EXTERNAL,
+                                  cv.CHAIN_APPROX_SIMPLE)
+    refCnts_V_Z = imutils.grab_contours(refCnts_V_Z)
+    refCnts_V_Z = sort_contours.sort_contours(refCnts_V_Z, method="left-to-right")[0]
+
+    ref_0_9 = cv.cvtColor(ref_0_9, cv.COLOR_BGR2GRAY)
+    ref_0_9 = cv.threshold(ref_0_9, 10, 255, cv.THRESH_BINARY_INV)[1]
+    refCnts_0_9 = cv.findContours(ref_0_9.copy(), cv.RETR_EXTERNAL,
+                                  cv.CHAIN_APPROX_SIMPLE)
+    refCnts_0_9 = imutils.grab_contours(refCnts_0_9)
+    refCnts_0_9 = sort_contours.sort_contours(refCnts_0_9, method="left-to-right")[0]
+
+    for (i, c) in enumerate(refCnts_0_9):
+        (x, y, w, h) = cv.boundingRect(c)
+        roi = ref_0_9[y:y + h, x:x + w]
+        roi = cv.resize(roi, (65, 45))
+        digits[i] = roi
+
+    for (i, c) in enumerate(refCnts_A_J):
+        (x, y, w, h) = cv.boundingRect(c)
+        roi = ref_A_J[y:y + h, x:x + w]
+        roi = cv.resize(roi, (65, 45))
+        letters[letters_A_J[i]] = roi
+
+    for (i, c) in enumerate(refCnts_K_U):
+        (x, y, w, h) = cv.boundingRect(c)
+        roi = ref_K_U[y:y + h, x:x + w]
+        roi = cv.resize(roi, (65, 45))
+        letters[letters_K_U[i]] = roi
+
+    for (i, c) in enumerate(refCnts_K_U):
+        (x, y, w, h) = cv.boundingRect(c)
+        roi = ref_K_U[y:y + h, x:x + w]
+        roi = cv.resize(roi, (65, 45))
+        letters[letters_K_U[i]] = roi
+    for (i, c) in enumerate(refCnts_V_Z):
+        (x, y, w, h) = cv.boundingRect(c)
+        roi = ref_V_Z[y:y + h, x:x + w]
+        roi = cv.resize(roi, (65, 45))
+        letters[letters_V_Z[i]] = roi
+    all.update(letters)
+    all.update(digits)
+    return all
 
 
 def roberts_cross(image):
@@ -87,14 +162,12 @@ def save_plate(image, image_in):
     cv.drawContours(image_in, [box], 0, (0, 0, 255), 2)
     return warped
 
-# TODO: improve character detection
 def process_plate(image):
     locs = []
     significant = []
     correctly_placed_cnts = {}
     x_prox = 30
     y_prox = 30
-
 
     kernel = np.ones((5, 5), dtype=np.uint8)
     image_gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
@@ -123,9 +196,9 @@ def process_plate(image):
     significant.sort(key=lambda x: x[0])
 
     for i, element in enumerate(significant):
-        if i != 0 and i != len(significant)-1:
+        if i != 0 and i != len(significant) - 1:
             (x, y, w, h) = element
-            (x_p, y_p, w_p, h_p) = significant[i-1]
+            (x_p, y_p, w_p, h_p) = significant[i - 1]
             (x_n, y_n, w_n, h_n) = significant[i + 1]
             if x - (x_p + w_p) > x_prox and x_n - (x + w) > x_prox:
                 significant.remove(element)
@@ -140,15 +213,15 @@ def process_plate(image):
 
         if i == len(significant) - 1:
             (x, y, w, h) = element
-            (x_p, y_p, w_p, h_p) = significant[i-1]
+            (x_p, y_p, w_p, h_p) = significant[i - 1]
             if x - (x_p + w_p) > x_prox:
                 significant.remove(element)
                 correctly_placed_cnts.pop(element)
 
     for i, element in enumerate(significant):
-        if i != 0 and i != len(significant)-1:
+        if i != 0 and i != len(significant) - 1:
             (x, y, w, h) = element
-            (x_p, y_p, w_p, h_p) = significant[i-1]
+            (x_p, y_p, w_p, h_p) = significant[i - 1]
             (x_n, y_n, w_n, h_n) = significant[i + 1]
             if abs(y - y_p) > y_prox and abs(y_n - y) > y_prox:
                 significant.remove(element)
@@ -163,7 +236,7 @@ def process_plate(image):
 
         if i == len(significant) - 1:
             (x, y, w, h) = element
-            (x_p, y_p, w_p, h_p) = significant[i-1]
+            (x_p, y_p, w_p, h_p) = significant[i - 1]
             if abs(y - y_p) > y_prox:
                 significant.remove(element)
                 correctly_placed_cnts.pop(element)
@@ -177,8 +250,29 @@ def process_plate(image):
     # cv.waitKey(1000)
     return significant, correctly_placed_cnts
 
-def process_letters(letter_list, letters_cnts, plate):
-    for element in letter_list:
+def deskew(image):
+    gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+    gray = cv.bitwise_not(gray)
+    thresh = cv.threshold(gray, 0, 255,
+                           cv.THRESH_BINARY | cv.THRESH_OTSU)[1]
+    coords = np.column_stack(np.where(thresh > 0))
+    angle = cv.minAreaRect(coords)[-1]
+    if angle < -45:
+        angle = -(90 + angle)
+    else:
+        angle = -angle
+    (h, w) = image.shape[:2]
+    center = (w // 2, h // 2)
+    M = cv.getRotationMatrix2D(center, angle, 1.0)
+    rotated = cv.warpAffine(image, M, (w, h),
+                             flags=cv.INTER_CUBIC, borderMode=cv.BORDER_REPLICATE)
+    return rotated
+
+def process_letters(letter_list, letters_cnts, plate, reference_dict):
+    results = {}
+    plate_read = []
+    for i, element in enumerate(letter_list):
+        kernel = np.ones((3, 3), dtype=np.uint8)
         letter_cnt = letters_cnts[element]
         letter = cv.minAreaRect(letter_cnt)
         box = cv.boxPoints(letter)
@@ -186,27 +280,49 @@ def process_letters(letter_list, letters_cnts, plate):
         width = int(letter[1][0])
         height = int(letter[1][1])
         src_pts = box.astype("float32")
-        dst_pts = np.array([[0, height - 1],
+        dst_pts = np.array([[0, height ],
                             [0, 0],
-                            [width - 1, 0],
-                            [width - 1, height - 1]], dtype="float32")
+                            [width , 0],
+                            [width , height]], dtype="float32")
 
         M = cv.getPerspectiveTransform(src_pts, dst_pts)
         warped = cv.warpPerspective(plate, M, (width, height))
         if warped.shape[1] > warped.shape[0]:
             warped = cv.rotate(warped, cv.ROTATE_90_COUNTERCLOCKWISE)
+        warped = deskew(warped)
+        warped = cv.resize(warped, (65, 45))
+        warped_gray = cv.cvtColor(warped, cv.COLOR_BGR2GRAY)
+        warped_gray = cv.GaussianBlur(warped_gray, (5,5), 0)
+        warped_thresh = cv.threshold(warped_gray, 0, 255, cv.THRESH_BINARY_INV + cv.THRESH_OTSU)[1]
+        warped_thresh = cv.dilate(warped_thresh, kernel)
+        warped_thresh = cv.erode(warped_thresh, kernel)
+        best_match = 0
+        best_letter = None
+        for (char, ROI) in reference_dict.items():
+            s = ssim(warped_thresh, ROI, multichannel=False)
+            if s > best_match:
+                best_match = s
+                best_letter = str(char)
+        if (i == 0 or i == 1) and best_letter == '0':
+            best_letter = 'O'
+        plate_read.append(str(best_letter))
+    return ''.join(plate_read)
 
-        cv.imshow('Letter', warped)
-        cv.waitKey(2000)
-        cv.destroyAllWindows()
+        # cv.imshow('Letter', warped_thresh)
+        # cv.imshow('Best Letter', reference_dict[best_letter])
+        # cv.waitKey(2000)
+        # cv.imshow('ROI', ROI)
+        # cv.waitKey(2000)
+        # cv.destroyAllWindows()
 
 
 def perform_processing(image: np.ndarray) -> str:
     img = image
     img = cv.resize(img, (640, 480))
+    reference_dict = reference()
     img_thresh = extract_plate(img)
     plate = save_plate(img_thresh, img)
     letter_list, letter_cnts = process_plate(plate)
-    process_letters(letter_list, letter_cnts, plate)
+    plate_read = process_letters(letter_list, letter_cnts, plate, reference_dict)
 
-    return 'XXXXXXX'
+    return str(plate_read)
