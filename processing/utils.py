@@ -91,9 +91,10 @@ def save_plate(image, image_in):
 def process_plate(image):
     locs = []
     significant = []
-    correctly_placed = []
+    correctly_placed_cnts = {}
     x_prox = 30
     y_prox = 30
+
 
     kernel = np.ones((5, 5), dtype=np.uint8)
     image_gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
@@ -117,6 +118,7 @@ def process_plate(image):
         if ar > 0.5 and ar < 4:
             if h > 40 and h < 150 and w > 10 and w < 80:
                 significant.append((x, y, w, h))
+                correctly_placed_cnts[(x, y, w, h)] = contour
 
     significant.sort(key=lambda x: x[0])
 
@@ -127,18 +129,21 @@ def process_plate(image):
             (x_n, y_n, w_n, h_n) = significant[i + 1]
             if x - (x_p + w_p) > x_prox and x_n - (x + w) > x_prox:
                 significant.remove(element)
+                correctly_placed_cnts.pop(element)
 
         if i == 0:
             (x, y, w, h) = element
             (x_n, y_n, w_n, h_n) = significant[i + 1]
             if x_n - (x + w) > x_prox:
                 significant.remove(element)
+                correctly_placed_cnts.pop(element)
 
         if i == len(significant) - 1:
             (x, y, w, h) = element
             (x_p, y_p, w_p, h_p) = significant[i-1]
             if x - (x_p + w_p) > x_prox:
                 significant.remove(element)
+                correctly_placed_cnts.pop(element)
 
     for i, element in enumerate(significant):
         if i != 0 and i != len(significant)-1:
@@ -147,26 +152,53 @@ def process_plate(image):
             (x_n, y_n, w_n, h_n) = significant[i + 1]
             if abs(y - y_p) > y_prox and abs(y_n - y) > y_prox:
                 significant.remove(element)
+                correctly_placed_cnts.pop(element)
 
         if i == 0:
             (x, y, w, h) = element
             (x_n, y_n, w_n, h_n) = significant[i + 1]
             if abs(y_n - y) > y_prox:
                 significant.remove(element)
+                correctly_placed_cnts.pop(element)
 
         if i == len(significant) - 1:
             (x, y, w, h) = element
             (x_p, y_p, w_p, h_p) = significant[i-1]
             if abs(y - y_p) > y_prox:
                 significant.remove(element)
+                correctly_placed_cnts.pop(element)
 
-    for element in significant:
-        (x, y, w, h) = element
-        cv.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+    # for element in significant:
+    #     (x, y, w, h) = element
+    #     cv.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
-    cv.imshow('Plate', image)
-    cv.imshow('Plate_Canny', image_thresh)
-    cv.waitKey(1000)
+    # cv.imshow('Plate', image)
+    # cv.imshow('Plate_Canny', image_thresh)
+    # cv.waitKey(1000)
+    return significant, correctly_placed_cnts
+
+def process_letters(letter_list, letters_cnts, plate):
+    for element in letter_list:
+        letter_cnt = letters_cnts[element]
+        letter = cv.minAreaRect(letter_cnt)
+        box = cv.boxPoints(letter)
+        box = np.int0(box)
+        width = int(letter[1][0])
+        height = int(letter[1][1])
+        src_pts = box.astype("float32")
+        dst_pts = np.array([[0, height - 1],
+                            [0, 0],
+                            [width - 1, 0],
+                            [width - 1, height - 1]], dtype="float32")
+
+        M = cv.getPerspectiveTransform(src_pts, dst_pts)
+        warped = cv.warpPerspective(plate, M, (width, height))
+        if warped.shape[1] > warped.shape[0]:
+            warped = cv.rotate(warped, cv.ROTATE_90_COUNTERCLOCKWISE)
+
+        cv.imshow('Letter', warped)
+        cv.waitKey(2000)
+        cv.destroyAllWindows()
 
 
 def perform_processing(image: np.ndarray) -> str:
@@ -174,5 +206,7 @@ def perform_processing(image: np.ndarray) -> str:
     img = cv.resize(img, (640, 480))
     img_thresh = extract_plate(img)
     plate = save_plate(img_thresh, img)
-    process_plate(plate)
+    letter_list, letter_cnts = process_plate(plate)
+    process_letters(letter_list, letter_cnts, plate)
+
     return 'XXXXXXX'
