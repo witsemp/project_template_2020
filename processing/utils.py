@@ -3,9 +3,16 @@ import cv2 as cv
 import imutils
 from scipy import ndimage
 from skimage.measure import compare_ssim
-from processing import sort_contours
 from skimage.measure import compare_ssim as ssim
 
+
+def sort_contours(cnts):
+    i = 0
+    reverse = False
+    boundingBoxes = [cv.boundingRect(c) for c in cnts]
+    (cnts, boundingBoxes) = zip(*sorted(zip(cnts, boundingBoxes),
+                                        key=lambda b: b[1][i], reverse=reverse))
+    return (cnts, boundingBoxes)
 
 def reference():
     ref_A_J = cv.imread('C:/Users/witse/PycharmProjects/project_template_2020/Reference_A_J.png')
@@ -24,14 +31,14 @@ def reference():
     refCnts_A_J = cv.findContours(ref_A_J.copy(), cv.RETR_EXTERNAL,
                                   cv.CHAIN_APPROX_SIMPLE)
     refCnts_A_J = imutils.grab_contours(refCnts_A_J)
-    refCnts_A_J = sort_contours.sort_contours(refCnts_A_J, method="left-to-right")[0]
+    refCnts_A_J = sort_contours(refCnts_A_J)[0]
 
     ref_K_U = cv.cvtColor(ref_K_U, cv.COLOR_BGR2GRAY)
     ref_K_U = cv.threshold(ref_K_U, 10, 255, cv.THRESH_BINARY_INV)[1]
     refCnts_K_U = cv.findContours(ref_K_U.copy(), cv.RETR_EXTERNAL,
                                   cv.CHAIN_APPROX_SIMPLE)
     refCnts_K_U = imutils.grab_contours(refCnts_K_U)
-    refCnts_K_U = sort_contours.sort_contours(refCnts_K_U, method="left-to-right")[0]
+    refCnts_K_U = sort_contours(refCnts_K_U)[0]
 
     ref_V_Z = cv.cvtColor(ref_V_Z, cv.COLOR_BGR2GRAY)
     ref_V_Z = cv.threshold(ref_V_Z, 10, 255, cv.THRESH_BINARY_INV)[1]
@@ -39,14 +46,14 @@ def reference():
     refCnts_V_Z = cv.findContours(ref_V_Z.copy(), cv.RETR_EXTERNAL,
                                   cv.CHAIN_APPROX_SIMPLE)
     refCnts_V_Z = imutils.grab_contours(refCnts_V_Z)
-    refCnts_V_Z = sort_contours.sort_contours(refCnts_V_Z, method="left-to-right")[0]
+    refCnts_V_Z = sort_contours(refCnts_V_Z)[0]
 
     ref_0_9 = cv.cvtColor(ref_0_9, cv.COLOR_BGR2GRAY)
     ref_0_9 = cv.threshold(ref_0_9, 10, 255, cv.THRESH_BINARY_INV)[1]
     refCnts_0_9 = cv.findContours(ref_0_9.copy(), cv.RETR_EXTERNAL,
                                   cv.CHAIN_APPROX_SIMPLE)
     refCnts_0_9 = imutils.grab_contours(refCnts_0_9)
-    refCnts_0_9 = sort_contours.sort_contours(refCnts_0_9, method="left-to-right")[0]
+    refCnts_0_9 = sort_contours(refCnts_0_9)[0]
 
     for (i, c) in enumerate(refCnts_0_9):
         (x, y, w, h) = cv.boundingRect(c)
@@ -100,11 +107,9 @@ def roberts_cross(image):
 def extract_plate(image):
     kernel1 = np.ones((1, 7), np.uint8)
     kernel2 = np.ones((7, 1), np.uint8)
-    # kernel7 = np.ones((5, 1), np.uint8)
     kernel3 = np.ones((7, 7), np.uint8)
     kernel4 = np.ones((3, 3), np.uint8)
     kernel5 = np.ones((9, 9), np.uint8)
-    # kernel6 = np.ones((5, 5), np.uint8)
     image_gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
     image_gray = cv.bilateralFilter(image_gray, 5, 75, 75)
     image_roberts = roberts_cross(image_gray)
@@ -136,7 +141,6 @@ def save_plate(image, image_in):
     cnts = cv.findContours(image.copy(), cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
     cnts = imutils.grab_contours(cnts)
     cnts = sorted(cnts, key=cv.contourArea, reverse=True)[:30]
-    #
     for c in cnts:
         rect = cv.minAreaRect(c)
         _, (w, h), _ = rect
@@ -168,8 +172,6 @@ def process_plate(image):
     correctly_placed_cnts = {}
     x_prox = 30
     y_prox = 30
-
-    kernel = np.ones((5, 5), dtype=np.uint8)
     image_gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
     image_gray = cv.bilateralFilter(image_gray, 11, 17, 17)
     image_gray = cv.GaussianBlur(image_gray, (5, 5), 0)
@@ -177,8 +179,6 @@ def process_plate(image):
     image_thresh = cv.adaptiveThreshold(image_gray, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C,
                                         cv.THRESH_BINARY, 15, 2)
     cnts, h = cv.findContours(image_thresh.copy(), cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE, hierarchy=True)
-    # cnts = imutils.grab_contours(cnts)
-    # cnts = sorted(cnts, key=cv.contourArea, reverse=True)[:30]
     for i, tupl in enumerate(h[0]):
         if tupl[3] != -1:
             tupl = np.insert(tupl, 0, [i])
@@ -306,6 +306,9 @@ def process_letters(letter_list, letters_cnts, plate, reference_dict):
         if (i == 0 or i == 1) and best_letter == '0':
             best_letter = 'O'
         plate_read.append(str(best_letter))
+        # cv.imshow('Letter', warped_thresh)
+        # cv.imshow('Best Letter', reference_dict[best_letter])
+        # cv.waitKey(2000)
     return ''.join(plate_read)
 
         # cv.imshow('Letter', warped_thresh)
